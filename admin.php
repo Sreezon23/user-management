@@ -1,22 +1,14 @@
 <?php
-require 'config.php';
-requireAuth();
+require_once 'config.php';
 
-if (isUserBlocked($pdo, $_SESSION['user_id'])) {
-    session_destroy();
-    header('Location: ' . SITE_URL . 'login.php?blocked=1');
+if (!isAuthenticated()) {
+    header('Location: ' . SITE_URL . 'login.php');
     exit;
 }
 
-$sortBy = $_GET['sort'] ?? 'last_login';
-$sortOrder = $_GET['order'] ?? 'DESC';
+requireAuth();
 
-$allowedSorts = ['name', 'email', 'last_login', 'status', 'created_at'];
-if (!in_array($sortBy, $allowedSorts)) $sortBy = 'last_login';
-if (!in_array($sortOrder, ['ASC', 'DESC'])) $sortOrder = 'DESC';
-
-$query = "SELECT id, name, email, status, last_login, created_at FROM users 
-          ORDER BY {$sortBy} {$sortOrder}";
+$query = 'SELECT id, name, email, status, last_login FROM users ORDER BY created_at DESC';
 $stmt = $pdo->query($query);
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -26,35 +18,37 @@ $actionType = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     $selectedIds = $_POST['selected_ids'] ?? [];
-
+    
     if (is_string($selectedIds)) {
         $selectedIds = [$selectedIds];
     }
-
+    
     if (!empty($selectedIds)) {
         try {
             foreach ($selectedIds as $userId) {
                 $userId = (int)$userId;
-
+                
                 if ($action === 'block') {
-                    $pdo->prepare('UPDATE users SET status = "blocked" WHERE id = ?')
-                        ->execute([$userId]);
+                    $pdo->prepare('UPDATE users SET status = ? WHERE id = ?')
+                        ->execute(['blocked', $userId]);
                 } elseif ($action === 'unblock') {
-                    $pdo->prepare('UPDATE users SET status = "active" WHERE id = ?')
-                        ->execute([$userId]);
+                    $pdo->prepare('UPDATE users SET status = ? WHERE id = ?')
+                        ->execute(['active', $userId]);
                 } elseif ($action === 'delete') {
                     $pdo->prepare('DELETE FROM users WHERE id = ?')
                         ->execute([$userId]);
                 } elseif ($action === 'delete_unverified') {
-                    $pdo->prepare('DELETE FROM users WHERE id = ? AND status = "unverified"')
-                        ->execute([$userId]);
+                    $pdo->prepare('DELETE FROM users WHERE id = ? AND status = ?')
+                        ->execute([$userId, 'unverified']);
                 }
             }
+            
             $actionMessage = ucfirst($action) . ' action completed successfully';
             $actionType = 'success';
-
+            
             $stmt = $pdo->query($query);
             $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
         } catch (Exception $e) {
             $actionMessage = 'Action failed: ' . $e->getMessage();
             $actionType = 'danger';
@@ -65,206 +59,93 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Panel - User Management</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        body {
-            background-color: #f5f5f5;
-        }
-        .navbar {
-            background: white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .toolbar {
-            background: white;
-            padding: 15px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        .table-container {
-            background: white;
-            border-radius: 5px;
-            padding: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        .status-badge {
-            padding: 5px 10px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 500;
-        }
-        .status-active {
-            background: #d4edda;
-            color: #155724;
-        }
-        .status-unverified {
-            background: #fff3cd;
-            color: #856404;
-        }
-        .status-blocked {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        .btn-toolbar {
-            margin-right: 5px;
-        }
-        .sortable {
-            cursor: pointer;
-        }
-        .sortable:hover {
-            text-decoration: underline;
-        }
-    </style>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg">
-        <div class="container-fluid">
-            <span class="navbar-brand">The App - Admin Panel</span>
-            <div class="ms-auto">
-                <span class="me-3">Welcome, <?php echo htmlspecialchars($_SESSION['user_name']); ?></span>
-                <a href="logout.php" class="btn btn-sm btn-outline-danger">Logout</a>
-            </div>
+    <div class="container mt-5">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Admin Panel</h1>
+            <a href="logout.php" class="btn btn-danger">Logout</a>
         </div>
-    </nav>
 
-    <div class="container-fluid p-4">
         <?php if (!empty($actionMessage)): ?>
-            <div class="alert alert-<?php echo $actionType; ?> alert-dismissible fade show">
+            <div class="alert alert-<?php echo $actionType; ?> alert-dismissible fade show" role="alert">
                 <?php echo htmlspecialchars($actionMessage); ?>
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         <?php endif; ?>
 
-        <div class="toolbar">
-            <form method="POST" id="actionForm" class="d-flex gap-2 align-items-center">
-                <button type="button" class="btn btn-danger btn-sm" onclick="submitAction('block')">
-                    <i class="fas fa-ban"></i> Block
-                </button>
-                <button type="button" class="btn btn-success btn-sm" onclick="submitAction('unblock')">
-                    <i class="fas fa-check"></i> Unblock
-                </button>
-                <button type="button" class="btn btn-info btn-sm" onclick="submitAction('delete')">
-                    <i class="fas fa-trash"></i> Delete
-                </button>
-                <button type="button" class="btn btn-warning btn-sm" onclick="submitAction('delete_unverified')">
-                    <i class="fas fa-times"></i> Delete Unverified
-                </button>
-                <input type="hidden" name="action" id="actionInput">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Registered Users (<?php echo count($users); ?>)</h5>
+            </div>
+            <div class="card-body">
+                <?php if (empty($users)): ?>
+                    <p class="text-muted">No users registered yet.</p>
+                <?php else: ?>
+                    <form method="POST">
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th><input type="checkbox" id="selectAll"></th>
+                                        <th>ID</th>
+                                        <th>Name</th>
+                                        <th>Email</th>
+                                        <th>Status</th>
+                                        <th>Last Login</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($users as $user): ?>
+                                        <tr>
+                                            <td><input type="checkbox" name="selected_ids[]" value="<?php echo $user['id']; ?>" class="user-checkbox"></td>
+                                            <td><?php echo htmlspecialchars($user['id']); ?></td>
+                                            <td><?php echo htmlspecialchars($user['name']); ?></td>
+                                            <td><?php echo htmlspecialchars($user['email']); ?></td>
+                                            <td>
+                                                <span class="badge bg-<?php echo ($user['status'] === 'active') ? 'success' : 'danger'; ?>">
+                                                    <?php echo ucfirst(htmlspecialchars($user['status'])); ?>
+                                                </span>
+                                            </td>
+                                            <td><?php echo $user['last_login'] ? htmlspecialchars($user['last_login']) : 'Never'; ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
 
-                <div class="ms-auto">
-                    <input type="text" class="form-control" placeholder="Filter by name or email" id="filterInput">
-                </div>
-            </form>
-        </div>
-
-        <div class="table-container">
-            <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th style="width: 50px;">
-                                <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
-                            </th>
-                            <th class="sortable" onclick="sort('name')">
-                                Name <i class="fas fa-sort"></i>
-                            </th>
-                            <th class="sortable" onclick="sort('email')">
-                                Email <i class="fas fa-sort"></i>
-                            </th>
-                            <th class="sortable" onclick="sort('status')">
-                                Status <i class="fas fa-sort"></i>
-                            </th>
-                            <th class="sortable" onclick="sort('last_login')">
-                                Last Login <i class="fas fa-sort"></i>
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody id="usersTableBody">
-                        <?php foreach ($users as $user): ?>
-                            <tr>
-                                <td>
-                                    <input type="checkbox" class="user-checkbox" value="<?php echo $user['id']; ?>" 
-                                           onchange="updateSelectAll()">
-                                </td>
-                                <td><?php echo htmlspecialchars($user['name']); ?></td>
-                                <td><?php echo htmlspecialchars($user['email']); ?></td>
-                                <td>
-                                    <span class="status-badge status-<?php echo $user['status']; ?>">
-                                        <?php echo ucfirst($user['status']); ?>
-                                    </span>
-                                </td>
-                                <td><?php echo $user['last_login'] ? date('M d, Y H:i', strtotime($user['last_login'])) : 'Never'; ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+                        <div class="mt-3">
+                            <label for="action" class="form-label">Select Action:</label>
+                            <div class="input-group mb-3">
+                                <select name="action" id="action" class="form-select" required>
+                                    <option value="">-- Choose Action --</option>
+                                    <option value="block">Block Selected</option>
+                                    <option value="unblock">Unblock Selected</option>
+                                    <option value="delete">Delete Selected</option>
+                                    <option value="delete_unverified">Delete Unverified</option>
+                                </select>
+                                <button type="submit" class="btn btn-primary">Execute</button>
+                            </div>
+                        </div>
+                    </form>
+                <?php endif; ?>
             </div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        const actionForm = document.getElementById('actionForm');
-        const actionInput = document.getElementById('actionInput');
-        const selectAllCheckbox = document.getElementById('selectAll');
-        const userCheckboxes = document.querySelectorAll('.user-checkbox');
-
-        function getSelectedIds() {
-            return Array.from(document.querySelectorAll('.user-checkbox:checked')).map(cb => cb.value);
-        }
-
-        function submitAction(action) {
-            const selectedIds = getSelectedIds();
-            if (selectedIds.length === 0) {
-                alert('Please select at least one user');
-                return;
-            }
-
-            if (confirm('Are you sure?')) {
-                actionInput.value = action;
-                
-
-                selectedIds.forEach(id => {
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = 'selected_ids[]';
-                    input.value = id;
-                    actionForm.appendChild(input);
-                });
-
-                actionForm.submit();
-            }
-        }
-
-        function toggleSelectAll() {
-            userCheckboxes.forEach(cb => cb.checked = selectAllCheckbox.checked);
-        }
-
-        function updateSelectAll() {
-            const checkedCount = document.querySelectorAll('.user-checkbox:checked').length;
-            selectAllCheckbox.checked = checkedCount === userCheckboxes.length;
-        }
-
-        function sort(field) {
-            const currentOrder = new URLSearchParams(window.location.search).get('order') || 'DESC';
-            const newOrder = currentOrder === 'ASC' ? 'DESC' : 'ASC';
-            window.location.href = `admin.php?sort=${field}&order=${newOrder}`;
-        }
-
-
-        document.getElementById('filterInput').addEventListener('keyup', function(e) {
-            const filter = e.target.value.toLowerCase();
-            document.querySelectorAll('#usersTableBody tr').forEach(row => {
-                const text = row.textContent.toLowerCase();
-                row.style.display = text.includes(filter) ? '' : 'none';
-            });
+        document.getElementById('selectAll').addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('.user-checkbox');
+            checkboxes.forEach(cb => cb.checked = this.checked);
         });
     </script>
 </body>

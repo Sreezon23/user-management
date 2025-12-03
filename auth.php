@@ -19,14 +19,17 @@ class Auth {
             
             $hashedPassword = password_hash($password, PASSWORD_BCRYPT);
             
+
+            $verificationToken = bin2hex(random_bytes(16));
+            
             $stmt = $this->pdo->prepare(
-                'INSERT INTO users (name, email, password, status, is_verified, created_at, updated_at) 
-                 VALUES (?, ?, ?, ?, ?, NOW(), NOW())'
+                'INSERT INTO users (name, email, password, status, verification_token, is_verified, created_at, updated_at) 
+                 VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())'
             );
             
-            $stmt->execute([$name, $email, $hashedPassword, 'active', 1]);
+            $stmt->execute([$name, $email, $hashedPassword, 'active', $verificationToken, 1]);
             
-            return ['success' => true, 'message' => 'Registration successful!'];
+            return ['success' => true, 'message' => 'Registration successful! You can now login.'];
             
         } catch (Exception $e) {
             return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
@@ -58,6 +61,26 @@ class Auth {
             $this->pdo->prepare('UPDATE users SET last_login = NOW() WHERE id = ?')->execute([$user['id']]);
             
             return ['success' => true, 'message' => 'Login successful'];
+            
+        } catch (Exception $e) {
+            return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
+        }
+    }
+    
+    public function verifyEmail($token) {
+        try {
+            $stmt = $this->pdo->prepare('SELECT id FROM users WHERE verification_token = ?');
+            $stmt->execute([$token]);
+            $user = $stmt->fetch();
+            
+            if (!$user) {
+                return ['success' => false, 'message' => 'Invalid verification token'];
+            }
+            
+            $this->pdo->prepare('UPDATE users SET is_verified = 1, status = ? WHERE id = ?')
+                ->execute(['active', $user['id']]);
+            
+            return ['success' => true, 'message' => 'Email verified successfully!'];
             
         } catch (Exception $e) {
             return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
