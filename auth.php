@@ -9,16 +9,12 @@ class Auth {
         $this->pdo = $pdo;
     }
 
-    // Register new user
     public function register($name, $email, $password) {
-        // Check if email already exists
         $stmt = $this->pdo->prepare('SELECT id FROM users WHERE email = ?');
         $stmt->execute([$email]);
         if ($stmt->rowCount() > 0) {
             return ['success' => false, 'message' => 'Email already registered'];
         }
-
-        // Hash password
         $hashedPassword = password_hash($password, PASSWORD_BCRYPT);
         $token = bin2hex(random_bytes(32));
 
@@ -29,12 +25,11 @@ class Auth {
             );
             $stmt->execute([$name, $email, $hashedPassword, $token]);
 
-            // Send verification email asynchronously
             try {
                 $emailSender = new EmailSender();
                 $emailSender->sendVerificationEmail($email, $token);
             } catch (Exception $e) {
-                // Log error but don't fail registration
+
                 error_log($e->getMessage());
             }
 
@@ -44,7 +39,6 @@ class Auth {
         }
     }
 
-    // Login user
     public function login($email, $password) {
         $stmt = $this->pdo->prepare(
             'SELECT id, name, email, password, status FROM users WHERE email = ?'
@@ -64,7 +58,6 @@ class Auth {
             return ['success' => false, 'message' => 'Invalid email or password'];
         }
 
-        // Update last login
         $updateStmt = $this->pdo->prepare(
             'UPDATE users SET last_login = NOW() WHERE id = ?'
         );
@@ -77,7 +70,6 @@ class Auth {
         return ['success' => true, 'message' => 'Login successful'];
     }
 
-    // Verify email
     public function verifyEmail($token) {
         $stmt = $this->pdo->prepare(
             'UPDATE users SET status = "active", is_verified = 1, verification_token = NULL 
@@ -92,7 +84,6 @@ class Auth {
         return ['success' => true, 'message' => 'Email verified successfully'];
     }
 
-    // Logout
     public function logout() {
         session_destroy();
         return true;

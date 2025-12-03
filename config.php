@@ -1,27 +1,22 @@
 <?php
-// Prevent multiple inclusions
 if (defined('CONFIG_LOADED')) {
     return;
 }
 define('CONFIG_LOADED', true);
 
-// Database credentials
 define('DB_HOST', 'localhost');
 define('DB_USER', 'root');
-define('DB_PASS', '');              // Empty for XAMPP
+define('DB_PASS', '');
 define('DB_NAME', 'user_management');
 
-// Email configuration (Gmail example)
 define('GMAIL_USER', 'sreezon51@gmail.com');
-define('GMAIL_PASS', 'odoi lglz cvun gprs');  // We'll setup later
+define('GMAIL_PASS', 'odoi lglz cvun gprs');
 define('SITE_URL', 'http://localhost/user-management/');
 
-// Start session
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Database connection
 try {
     $pdo = new PDO(
         'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME,

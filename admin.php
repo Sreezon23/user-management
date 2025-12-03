@@ -2,7 +2,6 @@
 require 'config.php';
 requireAuth();
 
-// Check if user is blocked
 if (isUserBlocked($pdo, $_SESSION['user_id'])) {
     session_destroy();
     header('Location: ' . SITE_URL . 'login.php?blocked=1');
@@ -12,18 +11,15 @@ if (isUserBlocked($pdo, $_SESSION['user_id'])) {
 $sortBy = $_GET['sort'] ?? 'last_login';
 $sortOrder = $_GET['order'] ?? 'DESC';
 
-// Validate sort parameters
 $allowedSorts = ['name', 'email', 'last_login', 'status', 'created_at'];
 if (!in_array($sortBy, $allowedSorts)) $sortBy = 'last_login';
 if (!in_array($sortOrder, ['ASC', 'DESC'])) $sortOrder = 'DESC';
 
-// Fetch users
 $query = "SELECT id, name, email, status, last_login, created_at FROM users 
           ORDER BY {$sortBy} {$sortOrder}";
 $stmt = $pdo->query($query);
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Handle actions
 $actionMessage = '';
 $actionType = '';
 
@@ -57,7 +53,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $actionMessage = ucfirst($action) . ' action completed successfully';
             $actionType = 'success';
 
-            // Refresh users list
             $stmt = $pdo->query($query);
             $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (Exception $e) {
@@ -129,7 +124,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </style>
 </head>
 <body>
-    <!-- Navbar -->
     <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
             <span class="navbar-brand">The App - Admin Panel</span>
@@ -148,7 +142,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         <?php endif; ?>
 
-        <!-- Toolbar -->
         <div class="toolbar">
             <form method="POST" id="actionForm" class="d-flex gap-2 align-items-center">
                 <button type="button" class="btn btn-danger btn-sm" onclick="submitAction('block')">
@@ -171,7 +164,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </form>
         </div>
 
-        <!-- Users Table -->
         <div class="table-container">
             <div class="table-responsive">
                 <table class="table table-hover">
@@ -238,7 +230,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (confirm('Are you sure?')) {
                 actionInput.value = action;
                 
-                // Add hidden inputs for selected IDs
+
                 selectedIds.forEach(id => {
                     const input = document.createElement('input');
                     input.type = 'hidden';
@@ -266,7 +258,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             window.location.href = `admin.php?sort=${field}&order=${newOrder}`;
         }
 
-        // Filter table
+
         document.getElementById('filterInput').addEventListener('keyup', function(e) {
             const filter = e.target.value.toLowerCase();
             document.querySelectorAll('#usersTableBody tr').forEach(row => {
