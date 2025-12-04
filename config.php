@@ -13,7 +13,7 @@ $dbPort = getenv('DB_PORT') ?: 5432;
 
 define('GMAIL_USER', getenv('GMAIL_USER') ?: 'sreezon51@gmail.com');
 define('GMAIL_PASS', getenv('GMAIL_PASS') ?: 'odoi lglz cvun gprs');
-define('SITE_URL', getenv('SITE_URL') ?: 'http://localhost/user-management/');
+define('SITE_URL', getenv('SITE_URL') ?: 'https://user-management-z4r0.onrender.com/');
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
