@@ -7,10 +7,11 @@ class EmailSender
 
     public function __construct()
     {
-        $this->apiKey = getenv('RESEND_API_KEY');
+        $this->apiKey = getenv('RESEND_API_KEY') ?: '';
         $this->from = getenv('EMAIL_FROM') ?: 'onboarding@resend.dev';
 
-        if (!$this->apiKey) {
+        if ($this->apiKey === '') {
+            error_log('EmailSender: RESEND_API_KEY is missing or empty');
             throw new Exception("Resend API key missing.");
         }
     }
@@ -30,16 +31,23 @@ class EmailSender
             "
         ];
 
+        $json = json_encode($payload);
+
+        if ($json === false) {
+            error_log('EmailSender: json_encode failed: ' . json_last_error_msg());
+            throw new Exception("Failed to encode email payload.");
+        }
+
         $ch = curl_init("https://api.resend.com/emails");
         curl_setopt_array($ch, [
             CURLOPT_HTTPHEADER => [
                 "Authorization: Bearer " . $this->apiKey,
                 "Content-Type: application/json"
             ],
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => json_encode($payload),
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $json,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 10,
+            CURLOPT_TIMEOUT        => 10,
         ]);
 
         $response = curl_exec($ch);
@@ -49,7 +57,7 @@ class EmailSender
 
         if ($response === false) {
             error_log("Resend cURL error: " . $error);
-            throw new Exception("Email sending failed.");
+            throw new Exception("Email sending failed (network).");
         }
 
         if ($httpCode < 200 || $httpCode > 299) {
