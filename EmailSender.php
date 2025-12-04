@@ -1,5 +1,5 @@
 <?php
-require 'vendor/autoload.php';
+require __DIR__ . '/vendor/autoload.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
@@ -26,6 +26,7 @@ class EmailSender {
     public function sendVerificationEmail($email, $token) {
         try {
             $this->mail->setFrom(GMAIL_USER, 'The App');
+            $this->mail->clearAddresses();
             $this->mail->addAddress($email);
             $this->mail->isHTML(true);
             $this->mail->Subject = 'Verify Your Email - The App';
