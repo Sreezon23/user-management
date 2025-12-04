@@ -48,10 +48,14 @@ class Auth {
             ];
             
         } catch (Exception $e) {
-            error_log('Register error: ' . $e->getMessage());
-            return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
-        }
-    }
+
+            error_log('Register: verification email failed: ' . $e->getMessage());
+
+        return [
+            'success' => true,
+            'message' => 'Registration completed, but email verification could not be sent. You can try again later.'
+    ];
+}
     
 public function login($email, $password) {
     try {
