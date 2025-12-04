@@ -1,47 +1,62 @@
 <?php
-require __DIR__ . '/vendor/autoload.php';
 
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
+class EmailSender
+{
+    private string $apiKey;
+    private string $from;
 
-class EmailSender {
-    private $mail;
+    public function __construct()
+    {
+        $this->apiKey = getenv('RESEND_API_KEY');
+        $this->from = getenv('EMAIL_FROM') ?: 'onboarding@resend.dev';
 
-    public function __construct() {
-        $this->mail = new PHPMailer(true);
-
-        try {
-            $this->mail->isSMTP();
-            $this->mail->Host = 'smtp.gmail.com';
-            $this->mail->SMTPAuth = true;
-            $this->mail->Username = GMAIL_USER;
-            $this->mail->Password = GMAIL_PASS;
-            $this->mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-            $this->mail->Port = 587;
-        } catch (Exception $e) {
-            throw new Exception('Email configuration error: ' . $e->getMessage());
+        if (!$this->apiKey) {
+            throw new Exception("Resend API key missing.");
         }
     }
 
-    public function sendVerificationEmail($email, $token) {
-        try {
-            $this->mail->setFrom(GMAIL_USER, 'The App');
-            $this->mail->clearAddresses();
-            $this->mail->addAddress($email);
-            $this->mail->isHTML(true);
-            $this->mail->Subject = 'Verify Your Email - The App';
+    public function sendVerificationEmail(string $email, string $token): bool
+    {
+        $verificationLink = SITE_URL . "verify.php?token=" . urlencode($token);
 
-            $verificationLink = SITE_URL . 'verify.php?token=' . $token;
-
-            $this->mail->Body = "
+        $payload = [
+            "from" => $this->from,
+            "to" => [$email],
+            "subject" => "Verify Your Email",
+            "html" => "
                 <h2>Email Verification</h2>
-                <p>Click the link below to verify your email:</p>
-                <a href='{$verificationLink}'>Verify Email</a>
-            ";
+                <p>Please click the link below:</p>
+                <a href='$verificationLink'>Verify Email</a>
+            "
+        ];
 
-            return $this->mail->send();
-        } catch (Exception $e) {
-            throw new Exception('Email send error: ' . $e->getMessage());
+        $ch = curl_init("https://api.resend.com/emails");
+        curl_setopt_array($ch, [
+            CURLOPT_HTTPHEADER => [
+                "Authorization: Bearer " . $this->apiKey,
+                "Content-Type: application/json"
+            ],
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode($payload),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 10,
+        ]);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($response === false) {
+            error_log("Resend cURL error: " . $error);
+            throw new Exception("Email sending failed.");
         }
+
+        if ($httpCode < 200 || $httpCode > 299) {
+            error_log("Resend API error ($httpCode): $response");
+            throw new Exception("Resend API error.");
+        }
+
+        return true;
     }
 }
