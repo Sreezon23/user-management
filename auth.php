@@ -21,7 +21,7 @@ public function register($name, $email, $password) {
 
         $verificationToken = bin2hex(random_bytes(16));
 
-        $status = 'pending';
+        $status = 'pending'; 
         $isVerified = 0;
 
         $stmt = $this->pdo->prepare(
@@ -31,11 +31,18 @@ public function register($name, $email, $password) {
         
         $stmt->execute([$name, $email, $hashedPassword, $status, $verificationToken, $isVerified]);
 
-        $verificationLink = SITE_URL . 'verify.php?token=' . urlencode($verificationToken);
-
         require_once __DIR__ . '/EmailSender.php';
         $sender = new EmailSender();
-        $sender->sendVerificationEmail($email, $name, $verificationLink);
+
+        try {
+            $sender->sendVerificationEmail($email, $verificationToken);
+        } catch (Exception $e) {
+
+            return [
+                'success' => false,
+                'message' => 'Registered, but failed to send verification email. Please contact support.'
+            ];
+        }
 
         return [
             'success' => true,
