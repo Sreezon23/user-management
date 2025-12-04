@@ -37,8 +37,8 @@ class Auth {
             } catch (Exception $e) {
                 error_log('Register: verification email failed: ' . $e->getMessage());
                 return [
-                    'success' => false,
-                    'message' => 'Email error: ' . $e->getMessage()
+                    'success' => true,
+                    'message' => 'Registration completed, but email verification could not be sent. You can try again later.'
                 ];
             }
 
@@ -48,50 +48,46 @@ class Auth {
             ];
             
         } catch (Exception $e) {
-
-            error_log('Register: verification email failed: ' . $e->getMessage());
-
-        return [
-            'success' => true,
-            'message' => 'Registration completed, but email verification could not be sent. You can try again later.'
-    ];
-}
-    
-public function login($email, $password) {
-    try {
-        $stmt = $this->pdo->prepare(
-            'SELECT id, name, email, password, status, is_verified FROM users WHERE email = ?'
-        );
-        $stmt->execute([$email]);
-        $user = $stmt->fetch();
-        
-        if (!$user) {
-            return ['success' => false, 'message' => 'Email not found'];
+            error_log('Register error: ' . $e->getMessage());
+            return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
         }
-        
-        if ($user['status'] === 'blocked') {
-            return ['success' => false, 'message' => 'Account blocked'];
-        }
-        
-        if (!password_verify($password, $user['password'])) {
-            return ['success' => false, 'message' => 'Invalid password'];
-        }
-        
-        $_SESSION['user_id'] = $user['id'];
-        $_SESSION['user_name'] = $user['name'];
-        $_SESSION['user_email'] = $user['email'];
-        
-        $this->pdo
-            ->prepare('UPDATE users SET last_login = NOW() WHERE id = ?')
-            ->execute([$user['id']]);
-        
-        return ['success' => true, 'message' => 'Login successful'];
-        
-    } catch (Exception $e) {
-        error_log('Login error: ' . $e->getMessage());
-        return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
     }
-}
+    
+    public function login($email, $password) {
+        try {
+            $stmt = $this->pdo->prepare(
+                'SELECT id, name, email, password, status, is_verified FROM users WHERE email = ?'
+            );
+            $stmt->execute([$email]);
+            $user = $stmt->fetch();
+            
+            if (!$user) {
+                return ['success' => false, 'message' => 'Email not found'];
+            }
+            
+            if ($user['status'] === 'blocked') {
+                return ['success' => false, 'message' => 'Account blocked'];
+            }
+            
+            if (!password_verify($password, $user['password'])) {
+                return ['success' => false, 'message' => 'Invalid password'];
+            }
+            
+            $_SESSION['user_id'] = $user['id'];
+            $_SESSION['user_name'] = $user['name'];
+            $_SESSION['user_email'] = $user['email'];
+            
+            $this->pdo
+                ->prepare('UPDATE users SET last_login = NOW() WHERE id = ?')
+                ->execute([$user['id']]);
+            
+            return ['success' => true, 'message' => 'Login successful'];
+            
+        } catch (Exception $e) {
+            error_log('Login error: ' . $e->getMessage());
+            return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
+        }
+    }
     
     public function verifyEmail($token) {
         try {
