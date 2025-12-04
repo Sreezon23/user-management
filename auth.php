@@ -8,33 +8,44 @@ class Auth {
         $this->pdo = $pdo;
     }
     
-    public function register($name, $email, $password) {
-        try {
-            $stmt = $this->pdo->prepare('SELECT id FROM users WHERE email = ?');
-            $stmt->execute([$email]);
-            
-            if ($stmt->rowCount() > 0) {
-                return ['success' => false, 'message' => 'Email already registered'];
-            }
-            
-            $hashedPassword = password_hash($password, PASSWORD_BCRYPT);
-            
-
-            $verificationToken = bin2hex(random_bytes(16));
-            
-            $stmt = $this->pdo->prepare(
-                'INSERT INTO users (name, email, password, status, verification_token, is_verified, created_at, updated_at) 
-                 VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())'
-            );
-            
-            $stmt->execute([$name, $email, $hashedPassword, 'active', $verificationToken, 1]);
-            
-            return ['success' => true, 'message' => 'Registration successful! You can now login.'];
-            
-        } catch (Exception $e) {
-            return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
+public function register($name, $email, $password) {
+    try {
+        $stmt = $this->pdo->prepare('SELECT id FROM users WHERE email = ?');
+        $stmt->execute([$email]);
+        
+        if ($stmt->rowCount() > 0) {
+            return ['success' => false, 'message' => 'Email already registered'];
         }
+        
+        $hashedPassword = password_hash($password, PASSWORD_BCRYPT);
+
+        $verificationToken = bin2hex(random_bytes(16));
+
+        $status = 'pending';
+        $isVerified = 0;
+
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO users (name, email, password, status, verification_token, is_verified, created_at, updated_at) 
+             VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())'
+        );
+        
+        $stmt->execute([$name, $email, $hashedPassword, $status, $verificationToken, $isVerified]);
+
+        $verificationLink = SITE_URL . 'verify.php?token=' . urlencode($verificationToken);
+
+        require_once __DIR__ . '/EmailSender.php';
+        $sender = new EmailSender();
+        $sender->sendVerificationEmail($email, $name, $verificationLink);
+
+        return [
+            'success' => true,
+            'message' => 'Registration successful! Please check your email to verify your account.'
+        ];
+        
+    } catch (Exception $e) {
+        return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
     }
+}
     
     public function login($email, $password) {
         try {
