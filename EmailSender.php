@@ -9,7 +9,7 @@ class EmailSender {
 
     public function __construct() {
         $this->mail = new PHPMailer(true);
-        
+
         try {
             $this->mail->isSMTP();
             $this->mail->Host = 'smtp.gmail.com';
@@ -30,18 +30,18 @@ class EmailSender {
             $this->mail->addAddress($email);
             $this->mail->isHTML(true);
             $this->mail->Subject = 'Verify Your Email - The App';
-            
+
             $verificationLink = SITE_URL . 'verify.php?token=' . $token;
+
             $this->mail->Body = "
                 <h2>Email Verification</h2>
                 <p>Click the link below to verify your email:</p>
                 <a href='{$verificationLink}'>Verify Email</a>
             ";
-            
+
             return $this->mail->send();
         } catch (Exception $e) {
             throw new Exception('Email send error: ' . $e->getMessage());
         }
     }
 }
-?>
