@@ -18,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $messageType = $result['success'] ? 'success' : 'danger';
         
         if ($result['success']) {
-            header('Location: ' . SITE_URL . 'admin.php');
+            header('Location: admin.php');
             exit;
         }
     }
