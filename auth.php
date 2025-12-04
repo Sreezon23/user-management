@@ -18,9 +18,7 @@ class Auth {
             }
             
             $hashedPassword = password_hash($password, PASSWORD_BCRYPT);
-
             $verificationToken = bin2hex(random_bytes(16));
-
             $status = 'active';
             $isVerified = 0;
 
@@ -38,10 +36,9 @@ class Auth {
                 $sender->sendVerificationEmail($email, $verificationToken);
             } catch (Exception $e) {
                 error_log('Register: verification email failed: ' . $e->getMessage());
-
                 return [
                     'success' => false,
-                    'message' => 'Registered, but failed to send verification email. Please contact support.'
+                    'message' => 'Email error: ' . $e->getMessage()
                 ];
             }
 
@@ -51,6 +48,7 @@ class Auth {
             ];
             
         } catch (Exception $e) {
+            error_log('Register error: ' . $e->getMessage());
             return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
         }
     }
@@ -90,6 +88,7 @@ class Auth {
             return ['success' => true, 'message' => 'Login successful'];
             
         } catch (Exception $e) {
+            error_log('Login error: ' . $e->getMessage());
             return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
         }
     }
@@ -111,6 +110,7 @@ class Auth {
             return ['success' => true, 'message' => 'Email verified successfully!'];
             
         } catch (Exception $e) {
+            error_log('Verify email error: ' . $e->getMessage());
             return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
         }
     }
