@@ -10,7 +10,7 @@ requireAuth();
 
 $currentUserId = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : 0;
 
-$stmt = $pdo->prepare('SELECT id, status FROM users WHERE id = ?');
+$stmt = $pdo->prepare('SELECT id, name, email, status FROM users WHERE id = ?');
 $stmt->execute([$currentUserId]);
 $currentUser = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -105,14 +105,30 @@ $actionType = $_GET['type'] ?? '';
         <?php endif; ?>
 
         <div class="card">
-            <div class="card-header bg-primary text-white">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Registered Users (<?php echo count($users); ?>)</h5>
+                <span class="badge bg-light text-dark">Bulk Actions Toolbar</span>
             </div>
             <div class="card-body">
-                <?php if (empty($users)): ?>
-                    <p class="text-muted">No users registered yet.</p>
-                <?php else: ?>
-                    <form method="POST">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="action" class="form-label fw-semibold">Toolbar:</label>
+                        <div class="input-group">
+                            <select name="action" id="action" class="form-select" required>
+                                <option value="">-- Choose Action --</option>
+                                <option value="block">Block Selected</option>
+                                <option value="unblock">Unblock Selected</option>
+                                <option value="delete">Delete Selected</option>
+                                <option value="delete_unverified">Delete Unverified Selected</option>
+                            </select>
+                            <button type="submit" class="btn btn-primary">Execute</button>
+                        </div>
+                        <small class="text-muted">Select one or more users below, then choose an action and click Execute.</small>
+                    </div>
+
+                    <?php if (empty($users)): ?>
+                        <p class="text-muted mt-3">No users registered yet.</p>
+                    <?php else: ?>
                         <div class="table-responsive">
                             <table class="table table-striped table-hover">
                                 <thead>
@@ -151,36 +167,25 @@ $actionType = $_GET['type'] ?? '';
                                 </tbody>
                             </table>
                         </div>
-
-                        <div class="mt-3">
-                            <label for="action" class="form-label">Select Action:</label>
-                            <div class="input-group mb-3">
-                                <select name="action" id="action" class="form-select" required>
-                                    <option value="">-- Choose Action --</option>
-                                    <option value="block">Block Selected</option>
-                                    <option value="unblock">Unblock Selected</option>
-                                    <option value="delete">Delete Selected</option>
-                                    <option value="delete_unverified">Delete Unverified</option>
-                                </select>
-                                <button type="submit" class="btn btn-primary">Execute</button>
-                            </div>
-                        </div>
-                    </form>
-                <?php endif; ?>
+                    <?php endif; ?>
+                </form>
             </div>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        document.getElementById('selectAll').addEventListener('change', function() {
-            const checkboxes = document.querySelectorAll('.user-checkbox');
-            checkboxes.forEach(cb => {
-                if (!cb.disabled) {
-                    cb.checked = this.checked;
-                }
+        const selectAll = document.getElementById('selectAll');
+        if (selectAll) {
+            selectAll.addEventListener('change', function() {
+                const checkboxes = document.querySelectorAll('.user-checkbox');
+                checkboxes.forEach(cb => {
+                    if (!cb.disabled) {
+                        cb.checked = this.checked;
+                    }
+                });
             });
-        });
+        }
     </script>
 </body>
 </html>
