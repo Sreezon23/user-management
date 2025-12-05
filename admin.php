@@ -8,56 +8,78 @@ if (!isAuthenticated()) {
 
 requireAuth();
 
-$query = 'SELECT id, name, email, status, last_login FROM users ORDER BY created_at DESC';
-$stmt = $pdo->query($query);
-$users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$currentUserId = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : 0;
 
-$actionMessage = '';
-$actionType = '';
+$stmt = $pdo->prepare('SELECT id, status FROM users WHERE id = ?');
+$stmt->execute([$currentUserId]);
+$currentUser = $stmt->fetch(PDO::FETCH_ASSOC);
+
+if (!$currentUser) {
+    header('Location: ' . SITE_URL . 'login.php');
+    exit;
+}
+
+if ($currentUser['status'] === 'blocked') {
+    session_destroy();
+    header('Location: ' . SITE_URL . 'login.php');
+    exit;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     $selectedIds = $_POST['selected_ids'] ?? [];
-    
+
     if (is_string($selectedIds)) {
         $selectedIds = [$selectedIds];
     }
-    
-    if (!empty($selectedIds)) {
-        try {
-            foreach ($selectedIds as $userId) {
-                $userId = (int)$userId;
-                
-                if ($action === 'block') {
-                    $pdo->prepare('UPDATE users SET status = ? WHERE id = ?')
-                        ->execute(['blocked', $userId]);
-                } elseif ($action === 'unblock') {
-                    $pdo->prepare('UPDATE users SET status = ? WHERE id = ?')
-                        ->execute(['active', $userId]);
-                } elseif ($action === 'delete') {
-                    $pdo->prepare('DELETE FROM users WHERE id = ?')
-                        ->execute([$userId]);
-                } elseif ($action === 'delete_unverified') {
-                    $pdo->prepare('DELETE FROM users WHERE id = ? AND status = ?')
-                        ->execute([$userId, 'unverified']);
-                }
-            }
-            
-            $actionMessage = ucfirst($action) . ' action completed successfully';
-            $actionType = 'success';
-            
-            $stmt = $pdo->query($query);
-            $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
-        } catch (Exception $e) {
-            $actionMessage = 'Action failed: ' . $e->getMessage();
-            $actionType = 'danger';
-        }
+
+    $selectedIds = array_map('intval', $selectedIds);
+    $selectedIds = array_values(array_diff($selectedIds, [$currentUserId]));
+
+    if ($action === '' || empty($selectedIds)) {
+        $msg = 'Please select at least one user and an action';
+        $type = 'warning';
     } else {
-        $actionMessage = 'Please select at least one user';
-        $actionType = 'warning';
+        try {
+            $placeholders = implode(',', array_fill(0, count($selectedIds), '?'));
+
+            if ($action === 'block') {
+                $stmt = $pdo->prepare("UPDATE users SET status = 'blocked' WHERE id IN ($placeholders)");
+                $stmt->execute($selectedIds);
+            } elseif ($action === 'unblock') {
+                $stmt = $pdo->prepare("UPDATE users SET status = 'active' WHERE id IN ($placeholders)");
+                $stmt->execute($selectedIds);
+            } elseif ($action === 'delete') {
+                $stmt = $pdo->prepare("DELETE FROM users WHERE id IN ($placeholders)");
+                $stmt->execute($selectedIds);
+            } elseif ($action === 'delete_unverified') {
+                $stmt = $pdo->prepare("DELETE FROM users WHERE id IN ($placeholders) AND is_verified = 0");
+                $stmt->execute($selectedIds);
+            }
+
+            $msg = ucfirst(str_replace('_', ' ', $action)) . ' action completed successfully';
+            $type = 'success';
+        } catch (Exception $e) {
+            $msg = 'Action failed: ' . $e->getMessage();
+            $type = 'danger';
+        }
     }
+
+    $params = http_build_query([
+        'msg' => $msg,
+        'type' => $type,
+    ]);
+
+    header('Location: ' . SITE_URL . 'admin.php?' . $params);
+    exit;
 }
+
+$query = 'SELECT id, name, email, status, last_login FROM users ORDER BY created_at DESC';
+$stmt = $pdo->query($query);
+$users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$actionMessage = $_GET['msg'] ?? '';
+$actionType = $_GET['type'] ?? '';
 ?>
 
 <!DOCTYPE html>
@@ -76,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <?php if (!empty($actionMessage)): ?>
-            <div class="alert alert-<?php echo $actionType; ?> alert-dismissible fade show" role="alert">
+            <div class="alert alert-<?php echo htmlspecialchars($actionType); ?> alert-dismissible fade show" role="alert">
                 <?php echo htmlspecialchars($actionMessage); ?>
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
@@ -106,7 +128,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <tbody>
                                     <?php foreach ($users as $user): ?>
                                         <tr>
-                                            <td><input type="checkbox" name="selected_ids[]" value="<?php echo $user['id']; ?>" class="user-checkbox"></td>
+                                            <td>
+                                                <input
+                                                    type="checkbox"
+                                                    name="selected_ids[]"
+                                                    value="<?php echo (int)$user['id']; ?>"
+                                                    class="user-checkbox"
+                                                    <?php if ((int)$user['id'] === $currentUserId) echo 'disabled'; ?>
+                                                >
+                                            </td>
                                             <td><?php echo htmlspecialchars($user['id']); ?></td>
                                             <td><?php echo htmlspecialchars($user['name']); ?></td>
                                             <td><?php echo htmlspecialchars($user['email']); ?></td>
@@ -145,7 +175,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <script>
         document.getElementById('selectAll').addEventListener('change', function() {
             const checkboxes = document.querySelectorAll('.user-checkbox');
-            checkboxes.forEach(cb => cb.checked = this.checked);
+            checkboxes.forEach(cb => {
+                if (!cb.disabled) {
+                    cb.checked = this.checked;
+                }
+            });
         });
     </script>
 </body>
