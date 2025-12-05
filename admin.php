@@ -34,7 +34,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $selectedIds = array_map('intval', $selectedIds);
-    $selectedIds = array_values(array_diff($selectedIds, [$currentUserId]));
+    $selectedIds = array_values($selectedIds);
+    $affectsCurrentUser = in_array($currentUserId, $selectedIds, true);
 
     if ($action === '' || empty($selectedIds)) {
         $msg = 'Please select at least one user and an action';
@@ -55,6 +56,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } elseif ($action === 'delete_unverified') {
                 $stmt = $pdo->prepare("DELETE FROM users WHERE id IN ($placeholders) AND is_verified = 0");
                 $stmt->execute($selectedIds);
+            }
+
+            if ($affectsCurrentUser && in_array($action, ['block', 'delete', 'delete_unverified'], true)) {
+                session_destroy();
+                header('Location: ' . SITE_URL . 'login.php');
+                exit;
             }
 
             $msg = ucfirst(str_replace('_', ' ', $action)) . ' action completed successfully';
@@ -81,7 +88,6 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $actionMessage = $_GET['msg'] ?? '';
 $actionType = $_GET['type'] ?? '';
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -89,6 +95,7 @@ $actionType = $_GET['type'] ?? '';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Panel - User Management</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 </head>
 <body>
     <div class="container mt-5">
@@ -105,35 +112,44 @@ $actionType = $_GET['type'] ?? '';
         <?php endif; ?>
 
         <div class="card">
-            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <div class="card-header bg-primary text-white">
                 <h5 class="mb-0">Registered Users (<?php echo count($users); ?>)</h5>
-                <span class="badge bg-light text-dark">Bulk Actions Toolbar</span>
             </div>
             <div class="card-body">
-                <form method="POST">
-                    <div class="mb-3">
-                        <label for="action" class="form-label fw-semibold">Toolbar:</label>
-                        <div class="input-group">
-                            <select name="action" id="action" class="form-select" required>
-                                <option value="">-- Choose Action --</option>
-                                <option value="block">Block Selected</option>
-                                <option value="unblock">Unblock Selected</option>
-                                <option value="delete">Delete Selected</option>
-                                <option value="delete_unverified">Delete Unverified Selected</option>
-                            </select>
-                            <button type="submit" class="btn btn-primary">Execute</button>
+                <form method="POST" id="userForm">
+                    <input type="hidden" name="action" id="actionField">
+
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="btn-toolbar" role="toolbar" aria-label="User actions">
+                            <div class="btn-group me-2" role="group">
+                                <button type="button" class="btn btn-sm btn-outline-primary" data-action="block">
+                                    Block
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="unblock">
+                                    Unblock
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-danger" data-action="delete">
+                                    Delete
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-danger" data-action="delete_unverified">
+                                    Delete unverified
+                                </button>
+                            </div>
                         </div>
-                        <small class="text-muted">Select one or more users below, then choose an action and click Execute.</small>
+
+                        <div class="ms-auto" style="max-width: 250px;">
+                            <input type="text" id="filterInput" class="form-control form-control-sm" placeholder="Filter users">
+                        </div>
                     </div>
 
                     <?php if (empty($users)): ?>
                         <p class="text-muted mt-3">No users registered yet.</p>
                     <?php else: ?>
                         <div class="table-responsive">
-                            <table class="table table-striped table-hover">
+                            <table class="table table-striped table-hover" id="usersTable">
                                 <thead>
                                     <tr>
-                                        <th><input type="checkbox" id="selectAll"></th>
+                                        <th style="width:40px;"><input type="checkbox" id="selectAll"></th>
                                         <th>ID</th>
                                         <th>Name</th>
                                         <th>Email</th>
@@ -150,7 +166,6 @@ $actionType = $_GET['type'] ?? '';
                                                     name="selected_ids[]"
                                                     value="<?php echo (int)$user['id']; ?>"
                                                     class="user-checkbox"
-                                                    <?php if ((int)$user['id'] === $currentUserId) echo 'disabled'; ?>
                                                 >
                                             </td>
                                             <td><?php echo htmlspecialchars($user['id']); ?></td>
@@ -180,9 +195,32 @@ $actionType = $_GET['type'] ?? '';
             selectAll.addEventListener('change', function() {
                 const checkboxes = document.querySelectorAll('.user-checkbox');
                 checkboxes.forEach(cb => {
-                    if (!cb.disabled) {
-                        cb.checked = this.checked;
-                    }
+                    cb.checked = this.checked;
+                });
+            });
+        }
+
+        document.querySelectorAll('[data-action]').forEach(function(btn) {
+            btn.addEventListener('click', function () {
+                const action = this.getAttribute('data-action');
+                const checked = document.querySelectorAll('.user-checkbox:checked');
+                if (checked.length === 0) {
+                    alert('Please select at least one user.');
+                    return;
+                }
+                document.getElementById('actionField').value = action;
+                document.getElementById('userForm').submit();
+            });
+        });
+
+        const filterInput = document.getElementById('filterInput');
+        if (filterInput) {
+            filterInput.addEventListener('keyup', function () {
+                const term = this.value.toLowerCase();
+                const rows = document.querySelectorAll('#usersTable tbody tr');
+                rows.forEach(function (row) {
+                    const text = row.innerText.toLowerCase();
+                    row.style.display = text.indexOf(term) !== -1 ? '' : 'none';
                 });
             });
         }
